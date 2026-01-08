@@ -29,13 +29,13 @@
         .header {
             background: linear-gradient(135deg, #0046FF 0%, #5A8BFF 100%);
             color: white;
-            padding: 20px;
+            padding: 12px 20px;
             text-align: center;
         }
         
         .header h1 {
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            margin-bottom: 6px;
         }
         
         .status {
@@ -65,24 +65,27 @@
         
         .config-section {
             background: #f9fafb;
-            padding: 15px;
+            padding: 8px 12px;
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         .config-section label {
-            display: block;
-            margin-bottom: 8px;
+            flex: 0 0 100px;
             font-weight: 600;
             color: #374151;
+            font-size: 13px;
         }
         
         .config-section input {
-            width: 100%;
-            padding: 10px;
+            flex: 1;
+            padding: 6px 10px;
             border: 2px solid #e5e7eb;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .config-section input:focus {
@@ -147,6 +150,12 @@
             border: 2px solid #e5e7eb;
             border-radius: 8px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel.send {
+            min-height: 550px;
         }
         
         .panel-header {
@@ -171,6 +180,13 @@
         
         .panel-content {
             padding: 15px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel.send .panel-content {
+            min-height: 500px;
         }
         
         .messages {
@@ -178,11 +194,21 @@
             color: #f9fafb;
             padding: 15px;
             border-radius: 8px;
-            height: 300px;
+            height: 400px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
             font-size: 13px;
             margin-bottom: 15px;
+        }
+        
+        .panel.send .messages {
+            margin-bottom: 0;
+            flex: 1;
+        }
+        
+        .agent-messages {
+            height: 550px;
+            min-height: 550px;
         }
         
         .message {
@@ -228,10 +254,16 @@
         
         .send-section input {
             flex: 1;
+            min-width: 0;
             padding: 10px;
             border: 2px solid #e5e7eb;
             border-radius: 6px;
             font-size: 14px;
+        }
+        
+        .send-section .btn-send {
+            flex: 0 0 80px;
+            min-width: 80px;
         }
         
         .send-section input:focus {
@@ -254,6 +286,9 @@
             height: 100px;
             overflow-y: auto;
             margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         
         .chat-message {
@@ -281,19 +316,20 @@
             gap: 12px;
             padding: 12px 16px;
             border-radius: 8px;
-            background: #f9fafb;
-            border-left: 4px solid #667eea;
+            background: transparent;
             margin-bottom: 10px;
         }
         
         .spinner-container.status {
-            border-left-color: #3b82f6;
-            background: #eff6ff;
+            background: transparent;
         }
         
         .spinner-container.reasoning {
-            border-left-color: #8b5cf6;
-            background: #f5f3ff;
+            background: transparent;
+        }
+        
+        .spinner-container.api {
+            background: transparent;
         }
         
         .spinner {
@@ -313,6 +349,10 @@
             border-top-color: #8b5cf6;
         }
         
+        .spinner-container.api .spinner {
+            border-top-color: #10b981;
+        }
+        
         .spinner-text {
             color: #374151;
             font-size: 14px;
@@ -324,10 +364,13 @@
         }
         
         .chat-empty {
-            text-align: center;
             color: #9ca3af;
-            padding: 20px;
+            padding: 12px 16px;
             font-style: italic;
+            margin: 0;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
         }
     </style>
 </head>
@@ -345,22 +388,26 @@
             </div>
             
             <div class="config-section">
-                <label for="ternId">Tern ID</label>
-                <input type="text" id="ternId" value="test-tern-123" placeholder="Tern ID를 입력하세요">
+                <label for="turnId">Turn ID</label>
+                <input type="text" id="turnId" value="test-Turn-123" placeholder="Turn ID를 입력하세요">
             </div>
             
             <div class="panels">
                 <!-- SSE 수신 패널 -->
                 <div class="panel">
                     <div class="panel-header receive">
-                        SSE 수신
+                        Chat Client
                     </div>
                     <div class="panel-content">
                         <div class="messages" id="receiveMessages">
                             <div class="empty-state">SSE 수신 로그</div>
                         </div>
                         <div class="chat-display" id="chatDisplay">
-                            <div class="chat-empty">채팅 메시지가 여기에 표시됩니다</div>
+                            <div class="chat-empty">채팅 메시지 영역</div>
+                        </div>
+                        <div class="send-section">
+                            <input type="text" id="messageInput" placeholder="전송할 메시지 입력..." onkeypress="handleKeyPress(event)">
+                            <button class="btn-send" onclick="sendMessage()">전송</button>
                         </div>
                     </div>
                 </div>
@@ -368,15 +415,11 @@
                 <!-- 메시지 전송 패널 -->
                 <div class="panel">
                     <div class="panel-header send">
-                       메시지 전송
+                       에이전트 영역
                     </div>
                     <div class="panel-content">
-                        <div class="messages" id="sendMessages">
-                            <div class="empty-state">rest 송신</div>
-                        </div>
-                        <div class="send-section">
-                            <input type="text" id="messageInput" placeholder="전송할 메시지 입력..." onkeypress="handleKeyPress(event)">
-                            <button class="btn-send" onclick="sendMessage()">전송</button>
+                        <div class="messages agent-messages" id="sendMessages">
+                            <div class="empty-state">redis 데이터 송신</div>
                         </div>
                     </div>
                 </div>
@@ -388,10 +431,10 @@
         let eventSource = null;
         let isConnecting = false;
         let pendingMessage = null;
-        const apiUrl = 'http://localhost:8000/api/v1'; // 고정된 API URL
-       // const apiUrl = 'http://sol-sse-gw.crewai-axd.com/api/v1'
+        //const apiUrl = 'http://localhost:8000/api/v1'; // 고정된 API URL
+        const apiUrl = 'http://sol-sse-gw.crewai-axd.com/api/v1'
         const sessionIdInput = document.getElementById('sessionId');
-        const ternIdInput = document.getElementById('ternId');
+        const turnIdInput = document.getElementById('turnId');
         const receiveMessagesDiv = document.getElementById('receiveMessages');
         const sendMessagesDiv = document.getElementById('sendMessages');
         const messageInput = document.getElementById('messageInput');
@@ -399,15 +442,15 @@
         const chatDisplayDiv = document.getElementById('chatDisplay');
         let shouldReconnect = true;
         
-        // ternId 카운터 초기화
-        function getNextTernId() {
-            const currentValue = ternIdInput.value.trim();
+        // turnId 카운터 초기화
+        function getNextturnId() {
+            const currentValue = turnIdInput.value.trim();
             const match = currentValue.match(/^(.+-)(\d+)$/);
             if (match) {
                 const prefix = match[1];
                 const number = parseInt(match[2], 10);
                 const nextId = `${prefix}${number + 1}`;
-                ternIdInput.value = nextId;
+                turnIdInput.value = nextId;
                 return nextId;
             }
             // 패턴이 맞지 않으면 그대로 반환
@@ -476,17 +519,43 @@
             chatDisplayDiv.scrollTop = chatDisplayDiv.scrollHeight;
         }
         
-        function showSpinner(message, type) {
-            // 빈 상태 메시지 제거
-            const chatEmpty = chatDisplayDiv.querySelector('.chat-empty');
-            if (chatEmpty) {
-                chatEmpty.remove();
+        async function callExternalAPI(requestId) {
+            try {
+                const sessionId = sessionIdInput.value.trim();
+                const response = await fetch('http://sol-was-mock-server.crewai-axd.com/serviceEndpoint/httpDigital', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cookie': `globalSessionKey=${sessionId}`
+                    },
+                    body: JSON.stringify({
+                        dataBody: {
+                            requestId: requestId
+                        },
+                        dataHeader: {
+                            trxCd: 'RSMCB9999A99'
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                addMessage(receiveMessagesDiv, 'system', `DBS 호출 완료: ${JSON.stringify(result)}`);
+            } catch (error) {
+                addMessage(receiveMessagesDiv, 'error', `DBS 호출 오류: ${error.message}`);
             }
-            
+        }
+
+        function showSpinner(message, type) {
             // 기존 스피너 제거
             const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
             if (existingSpinner) {
                 existingSpinner.remove();
+            }
+            
+            // 빈 상태 메시지 제거
+            const chatEmpty = chatDisplayDiv.querySelector('.chat-empty');
+            if (chatEmpty) {
+                chatEmpty.remove();
             }
             
             const spinnerDiv = document.createElement('div');
@@ -507,7 +576,7 @@
 
         function connect(callback) {
             const sessionId = sessionIdInput.value.trim();
-            const ternId = ternIdInput.value.trim();
+            const turnId = turnIdInput.value.trim();
             
             if (!sessionId) {
                 alert('Session ID를 입력해주세요.');
@@ -515,8 +584,8 @@
                 return;
             }
             
-            if (!ternId) {
-                alert('Tern ID를 입력해주세요.');
+            if (!turnId) {
+                alert('Turn ID를 입력해주세요.');
                 if (callback) callback(false);
                 return;
             }
@@ -559,7 +628,7 @@
             setCookie('globalSessionKey', sessionId);
             
             // 쿼리 파라미터로도 전달 (쿠키가 안 될 경우 대비)
-            const url = `${apiUrl}/client/chat/stream?globalSessionKey=${encodeURIComponent(sessionId)}&ternId=${encodeURIComponent(ternId)}`;
+            const url = `${apiUrl}/client/chat/stream?globalSessionKey=${encodeURIComponent(sessionId)}&turnId=${encodeURIComponent(turnId)}`;
             updateStatus('connecting', '연결 중...');
             addMessage(receiveMessagesDiv, 'system', `SSE 연결 시도: ${url}`);
             
@@ -585,12 +654,20 @@
                     
                     // COT 메시지 처리
                     // type이 상위 레벨, data.message 구조 확인
-                    if (data.type && data.data && data.data.message) {
-                        if (data.type === 'status') {
+                    if (data.type && data.data) {
+                        if (data.type === 'status' && data.data.message) {
                             showSpinner(data.data.message, 'status');
-                        } else if (data.type === 'reasoning_summary') {
+                        } else if (data.type === 'api') {
+                            // requestId가 있으면 API 호출
+                            if (data.data.requestId) {
+                                callExternalAPI(data.data.requestId);
+                                showSpinner('고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.', 'api');
+                            } else if (data.data.message) {
+                                showSpinner(data.data.message, 'api');
+                            }
+                        } else if (data.type === 'reasoning_summary' && data.data.message) {
                             showSpinner(data.data.message, 'reasoning');
-                        } else if (data.type === 'end') {
+                        } else if (data.type === 'end' && data.data.message) {
                             addChatMessage(data.data.message, true);
                             shouldReconnect = false; // end가 오면 재연결 시도 안 함
                             // 연결 명시적으로 종료
@@ -598,19 +675,26 @@
                                 eventSource.close();
                                 eventSource = null;
                             }
-                            // SSE 종료 시 ternId 증가
-                            getNextTernId();
+                            // SSE 종료 시 turnId 증가
+                            getNextturnId();
                             updateStatus('disconnected', '연결 종료');
                             addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                         }
                     }
                     // 하위 호환성: data.transaction_payload 구조 (구버전)
-                    else if (data.type && data.transaction_payload && data.transaction_payload.message) {
-                        if (data.type === 'status') {
+                    else if (data.type && data.transaction_payload) {
+                        if (data.type === 'status' && data.transaction_payload.message) {
                             showSpinner(data.transaction_payload.message, 'status');
-                        } else if (data.type === 'reasoning_summary') {
+                        } else if (data.type === 'api') {
+                            if (data.transaction_payload.requestId) {
+                                callExternalAPI(data.transaction_payload.requestId);
+                                showSpinner('고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.', 'api');
+                            } else if (data.transaction_payload.message) {
+                                showSpinner(data.transaction_payload.message, 'api');
+                            }
+                        } else if (data.type === 'reasoning_summary' && data.transaction_payload.message) {
                             showSpinner(data.transaction_payload.message, 'reasoning');
-                        } else if (data.type === 'end') {
+                        } else if (data.type === 'end' && data.transaction_payload.message) {
                             addChatMessage(data.transaction_payload.message, true);
                             shouldReconnect = false; // end가 오면 재연결 시도 안 함
                             // 연결 명시적으로 종료
@@ -618,17 +702,24 @@
                                 eventSource.close();
                                 eventSource = null;
                             }
-                            // SSE 종료 시 ternId 증가
-                            getNextTernId();
+                            // SSE 종료 시 turnId 증가
+                            getNextturnId();
                             updateStatus('disconnected', '연결 종료');
                             addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                         }
                     }
                     // 하위 호환성: data.data.transaction_payload 구조 (구버전)
-                    else if (data.type && data.data && data.data.transaction_payload && data.data.transaction_payload.message) {
-                        if (data.type === 'status') {
+                    else if (data.type && data.data && data.data.transaction_payload) {
+                        if (data.type === 'status' && data.data.transaction_payload.message) {
                             showSpinner(data.data.transaction_payload.message, 'status');
-                        } else if (data.type === 'reasoning_summary') {
+                        } else if (data.type === 'api') {
+                            if (data.data.transaction_payload.requestId) {
+                                callExternalAPI(data.data.transaction_payload.requestId);
+                                showSpinner('고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.', 'api');
+                            } else if (data.data.transaction_payload.message) {
+                                showSpinner(data.data.transaction_payload.message, 'api');
+                            }
+                        } else if (data.type === 'reasoning_summary' && data.data.transaction_payload.message) {
                             showSpinner(data.data.transaction_payload.message, 'reasoning');
                         } else if (data.type === 'end') {
                             addChatMessage(data.data.transaction_payload.message, true);
@@ -638,8 +729,8 @@
                                 eventSource.close();
                                 eventSource = null;
                             }
-                            // SSE 종료 시 ternId 증가
-                            getNextTernId();
+                            // SSE 종료 시 turnId 증가
+                            getNextturnId();
                             updateStatus('disconnected', '연결 종료');
                             addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                         }
@@ -653,7 +744,7 @@
                 isConnecting = false;
                 if (!shouldReconnect) {
                     // end가 와서 종료된 경우 정상 종료로 처리
-                    // ternId는 이미 end 처리 시 증가했으므로 여기서는 증가하지 않음
+                    // turnId는 이미 end 처리 시 증가했으므로 여기서는 증가하지 않음
                     updateStatus('disconnected', '연결 종료');
                     addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                 } else {
@@ -676,20 +767,26 @@
 
         async function sendMessageInternal(messageData, type) {
             try {
-                const ternId = ternIdInput.value.trim();
+                const turnId = turnIdInput.value.trim();
+                const ts = Date.now();
+                const requestBody = {
+                    turnId: turnId,
+                    seq: 0,
+                    agent: 'master',
+                    ts: ts,
+                    type: type,
+                    data: messageData
+                };
+                
+                // 전송할 전체 데이터 표시
+                addMessage(sendMessagesDiv, 'sent', requestBody, '전송');
+                
                 const response = await fetch(`${apiUrl}/agent/send-redis`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        ternId: ternId,
-                        seq:0,
-                        agent: 'master',
-                        ts: Date.now(),
-                        type: type,
-                        data: messageData
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const result = await response.json();
@@ -770,37 +867,33 @@
             const messages = [
                 {
                     type: 'status',
-                    message: '질문 의도 분석 중입니다.'
+                    message: '사용자 질문을 분석하고 관련 정보를 검색 중입니다.'
+                },
+                {
+                    type: 'api',
+                    requestId: 'diekdslfsidnnekd'
                 },
                 {
                     type: 'reasoning_summary',
-                    message: '질문에 대한 답변을 요약중입니다.'
+                    message: '수집된 정보를 바탕으로 답변을 구성하고 있습니다.'
                 },
                 {
                     type: 'end',
-                    message: `[${message}]에 대한 답변으로 마무리했습니다.`
+                    message: `[${message}] 에 대한 답변은 실제 AI 에이전트와 연동 후 제공됩니다.`
                 }
             ];
 
             for (let i = 0; i < messages.length; i++) {
                 const msg = messages[i];
-                const messageData = {
-                    message: msg.message
-                };
-
-                // 전송할 메시지 표시
-                const displayData = {
-                    type: msg.type,
-                    ...messageData
-                };
-                addMessage(sendMessagesDiv, 'sent', displayData, '전송');
+                // type을 제외한 나머지 속성들을 messageData에 포함
+                const { type, ...messageData } = msg;
 
                 // 메시지 전송
-                await sendMessageInternal(messageData, msg.type);
+                await sendMessageInternal(messageData, type);
 
                 // 마지막 메시지가 아니면 3초 대기
                 if (i < messages.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    await new Promise(resolve => setTimeout(resolve,4000));
                 }
             }
         }

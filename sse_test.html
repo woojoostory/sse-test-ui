@@ -207,8 +207,8 @@
         }
         
         .agent-messages {
-            height: 550px;
-            min-height: 550px;
+            height: 400px;
+            min-height: 400px;
         }
         
         .message {
@@ -283,7 +283,7 @@
             border: 2px solid #e5e7eb;
             border-radius: 8px;
             padding: 15px;
-            height: 100px;
+            height: 140px;
             overflow-y: auto;
             margin-top: 15px;
             display: flex;
@@ -383,11 +383,6 @@
         
         <div class="content">
             <div class="config-section">
-                <label for="sessionId">Session ID</label>
-                <input type="text" id="sessionId" value="test-session-123" placeholder="test-session-123">
-            </div>
-            
-            <div class="config-section">
                 <label for="turnId">Turn ID</label>
                 <input type="text" id="turnId" value="test-Turn-123" placeholder="Turn ID를 입력하세요">
             </div>
@@ -421,6 +416,9 @@
                         <div class="messages agent-messages" id="sendMessages">
                             <div class="empty-state">redis 데이터 송신</div>
                         </div>
+                        <div class="chat-display" id="apiResultDisplay">
+                            <div class="chat-empty">API 결과 영역</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -433,14 +431,16 @@
         let pendingMessage = null;
         //const apiUrl = 'http://localhost:8000/api/v1'; // 고정된 API URL
         const apiUrl = 'http://sol-sse-gw.crewai-axd.com/api/v1'
-        const sessionIdInput = document.getElementById('sessionId');
+        const sessionId = 'test1234'; // 고정된 Session ID
         const turnIdInput = document.getElementById('turnId');
         const receiveMessagesDiv = document.getElementById('receiveMessages');
         const sendMessagesDiv = document.getElementById('sendMessages');
         const messageInput = document.getElementById('messageInput');
         const statusDiv = document.getElementById('status');
         const chatDisplayDiv = document.getElementById('chatDisplay');
+        const apiResultDisplayDiv = document.getElementById('apiResultDisplay');
         let shouldReconnect = true;
+        let lastApiResult = null; // API 결과 저장
         
         // turnId 카운터 초기화
         function getNextturnId() {
@@ -519,9 +519,79 @@
             chatDisplayDiv.scrollTop = chatDisplayDiv.scrollHeight;
         }
         
+        function addApiResultMessage(message) {
+            // 스피너 메시지는 에이전트 결과 영역에 표시하지 않음
+            if (message === '고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.') {
+                return;
+            }
+            
+            // 빈 상태 메시지 제거
+            const chatEmpty = apiResultDisplayDiv.querySelector('.chat-empty');
+            if (chatEmpty) {
+                chatEmpty.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'chat-message-text';
+            textDiv.textContent = message;
+            
+            messageDiv.appendChild(textDiv);
+            apiResultDisplayDiv.appendChild(messageDiv);
+            apiResultDisplayDiv.scrollTop = apiResultDisplayDiv.scrollHeight;
+        }
+        
+        async function callTransactionAPI() {
+            // API 호출 전 스피너 메시지를 SSE로 전송
+            await sendMessageInternal({ message: '고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.' }, 'api');
+            
+            try {
+                const turnId = turnIdInput.value.trim();
+                
+                const response = await fetch(`${apiUrl}/sol/transaction`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        turnId: turnId,
+                        transactionPayload: [
+                            {
+                                trxCd: 'RSMCB9999A99',
+                                dataBody: 'test_data_body'
+                            }
+                        ]
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // 응답에서 responseData 추출하여 SSE로 전송
+                if (result.transactionResult && result.transactionResult.length > 0) {
+                    const responseData = result.transactionResult[0].responseData;
+                    if (responseData) {
+                        // API 결과 저장
+                        lastApiResult = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+                        
+                        // responseData를 SSE로 전송 (type: api)
+                        const messageData = typeof responseData === 'string' 
+                            ? { message: responseData } 
+                            : { message: JSON.stringify(responseData) };
+                        await sendMessageInternal(messageData, 'api');
+                    }
+                }
+                
+                addMessage(receiveMessagesDiv, 'system', `Transaction API 호출 완료: ${JSON.stringify(result)}`);
+            } catch (error) {
+                addMessage(receiveMessagesDiv, 'error', `Transaction API 호출 오류: ${error.message}`);
+            }
+        }
+
         async function callExternalAPI(requestId) {
             try {
-                const sessionId = sessionIdInput.value.trim();
                 const response = await fetch('http://sol-was-mock-server.crewai-axd.com/serviceEndpoint/httpDigital', {
                     method: 'POST',
                     headers: {
@@ -575,14 +645,7 @@
         }
 
         function connect(callback) {
-            const sessionId = sessionIdInput.value.trim();
             const turnId = turnIdInput.value.trim();
-            
-            if (!sessionId) {
-                alert('Session ID를 입력해주세요.');
-                if (callback) callback(false);
-                return;
-            }
             
             if (!turnId) {
                 alert('Turn ID를 입력해주세요.');
@@ -621,6 +684,8 @@
 
             // 채팅 표시 영역 초기화
             chatDisplayDiv.innerHTML = '<div class="chat-empty">채팅 메시지가 여기에 표시됩니다</div>';
+            // API 결과 영역 초기화
+            apiResultDisplayDiv.innerHTML = '<div class="chat-empty">API 결과 영역</div>';
             // 새 연결 시작 시 shouldReconnect를 true로 설정
             shouldReconnect = true;
 
@@ -657,7 +722,21 @@
                     if (data.type && data.data) {
                         if (data.type === 'status' && data.data.message) {
                             showSpinner(data.data.message, 'status');
-                        } else if (data.type === 'api') {
+                        } else if (data.type === 'api' && data.data.message) {
+                            // api 타입 메시지 처리
+                            if (data.data.message === '고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.') {
+                                // 스피너 메시지인 경우 스피너 표시
+                                showSpinner(data.data.message, 'api');
+                            } else {
+                                // API 결과 메시지인 경우 스피너 제거하고 결과 표시
+                                const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
+                                if (existingSpinner) {
+                                    existingSpinner.remove();
+                                }
+                                // API 결과를 에이전트 영역에 표시
+                                addApiResultMessage(data.data.message);
+                            }
+                        } else if (data.type === 'api_call') {
                             // requestId가 있으면 API 호출
                             if (data.data.requestId) {
                                 callExternalAPI(data.data.requestId);
@@ -690,7 +769,18 @@
                                 callExternalAPI(data.transaction_payload.requestId);
                                 showSpinner('고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.', 'api');
                             } else if (data.transaction_payload.message) {
-                                showSpinner(data.transaction_payload.message, 'api');
+                                // api 타입 메시지 처리
+                                if (data.transaction_payload.message === '고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.') {
+                                    // 스피너 메시지인 경우 스피너 표시
+                                    showSpinner(data.transaction_payload.message, 'api');
+                                } else {
+                                    // API 결과 메시지인 경우 스피너 제거하고 결과 표시
+                                    const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
+                                    if (existingSpinner) {
+                                        existingSpinner.remove();
+                                    }
+                                    addApiResultMessage(data.transaction_payload.message);
+                                }
                             }
                         } else if (data.type === 'reasoning_summary' && data.transaction_payload.message) {
                             showSpinner(data.transaction_payload.message, 'reasoning');
@@ -717,7 +807,18 @@
                                 callExternalAPI(data.data.transaction_payload.requestId);
                                 showSpinner('고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.', 'api');
                             } else if (data.data.transaction_payload.message) {
-                                showSpinner(data.data.transaction_payload.message, 'api');
+                                // api 타입 메시지 처리
+                                if (data.data.transaction_payload.message === '고객 정보를 조회하여 필요한 데이터를 가져오는 중입니다.') {
+                                    // 스피너 메시지인 경우 스피너 표시
+                                    showSpinner(data.data.transaction_payload.message, 'api');
+                                } else {
+                                    // API 결과 메시지인 경우 스피너 제거하고 결과 표시
+                                    const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
+                                    if (existingSpinner) {
+                                        existingSpinner.remove();
+                                    }
+                                    addApiResultMessage(data.data.transaction_payload.message);
+                                }
                             }
                         } else if (data.type === 'reasoning_summary' && data.data.transaction_payload.message) {
                             showSpinner(data.data.transaction_payload.message, 'reasoning');
@@ -801,13 +902,7 @@
         }
 
         async function sendMessage() {
-            const sessionId = sessionIdInput.value.trim();
             const message = messageInput.value.trim();
-            
-            if (!sessionId) {
-                alert('Session ID를 입력해주세요.');
-                return;
-            }
             
             if (!message) {
                 alert('메시지를 입력해주세요.');
@@ -862,16 +957,15 @@
 
             // 입력 필드 초기화
             messageInput.value = '';
+            
+            // API 결과 초기화
+            lastApiResult = null;
 
             // 3개의 메시지를 3초 간격으로 전송
             const messages = [
                 {
                     type: 'status',
                     message: '사용자 질문을 분석하고 관련 정보를 검색 중입니다.'
-                },
-                {
-                    type: 'api',
-                    requestId: 'diekdslfsidnnekd'
                 },
                 {
                     type: 'reasoning_summary',
@@ -884,16 +978,34 @@
             ];
 
             for (let i = 0; i < messages.length; i++) {
-                const msg = messages[i];
+                let msg = messages[i];
+                
+                // end 메시지인 경우 API 결과 포함
+                if (msg.type === 'end') {
+                    msg = {
+                        ...msg,
+                        message: `[${message}] 에 대한 답변은 실제 AI 에이전트와 연동 후 제공됩니다.${lastApiResult ? ` api를 통해서 받은 메시지는 [${lastApiResult}] 입니다.` : ''}`
+                    };
+                }
+                
                 // type을 제외한 나머지 속성들을 messageData에 포함
                 const { type, ...messageData } = msg;
 
                 // 메시지 전송
                 await sendMessageInternal(messageData, type);
 
-                // 마지막 메시지가 아니면 3초 대기
-                if (i < messages.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve,4000));
+                // status 다음에 transaction API 호출 (지연 후)
+                if (type === 'status') {
+                    // 5초 대기 후 API 호출
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await callTransactionAPI();
+                    // API 호출 완료 후 바로 다음 메시지로 넘어가므로 대기 시간 없음
+                } else {
+                    // status가 아닌 경우에만 대기
+                    // 마지막 메시지가 아니면 5초 대기
+                    if (i < messages.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve,5000));
+                    }
                 }
             }
         }

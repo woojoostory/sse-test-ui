@@ -194,7 +194,7 @@
             color: #f9fafb;
             padding: 15px;
             border-radius: 8px;
-            height: 400px;
+            height: 350px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
             font-size: 13px;
@@ -207,8 +207,8 @@
         }
         
         .agent-messages {
-            height: 400px;
-            min-height: 400px;
+            height: 350;
+            min-height: 350;
         }
         
         .message {
@@ -288,7 +288,7 @@
             margin-top: 15px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            align-items: flex-start;
         }
         
         .chat-message {
@@ -314,10 +314,10 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 16px;
+            padding: 6px 12px;
             border-radius: 8px;
             background: transparent;
-            margin-bottom: 10px;
+            margin-bottom: 2px;
         }
         
         .spinner-container.status {
@@ -357,6 +357,39 @@
             color: #374151;
             font-size: 14px;
             font-weight: 500;
+        }
+        
+        .spinner-container.completed .spinner {
+            animation: none;
+            border: none;
+            width: 20px;
+            height: 20px;
+            position: relative;
+            background: transparent;
+        }
+        
+        .spinner-container.completed .spinner::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -60%) rotate(45deg);
+            width: 6px;
+            height: 12px;
+            border: solid;
+            border-width: 0 2px 2px 0;
+        }
+        
+        .spinner-container.completed.status .spinner::after {
+            border-color: #3b82f6;
+        }
+        
+        .spinner-container.completed.reasoning .spinner::after {
+            border-color: #8b5cf6;
+        }
+        
+        .spinner-container.completed.api .spinner::after {
+            border-color: #10b981;
         }
         
         @keyframes spin {
@@ -501,12 +534,6 @@
                 chatEmpty.remove();
             }
             
-            // 기존 스피너 제거
-            const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
-            if (existingSpinner) {
-                existingSpinner.remove();
-            }
-            
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${isFinal ? 'final' : ''}`;
             
@@ -615,17 +642,39 @@
             }
         }
 
-        function showSpinner(message, type) {
-            // 기존 스피너 제거
-            const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
-            if (existingSpinner) {
-                existingSpinner.remove();
+        function completeSpinner(type) {
+            // 해당 타입의 마지막 스피너를 완료 처리
+            const spinners = chatDisplayDiv.querySelectorAll(`.spinner-container.${type}:not(.completed)`);
+            if (spinners.length > 0) {
+                const lastSpinner = spinners[spinners.length - 1];
+                lastSpinner.classList.add('completed');
             }
-            
+        }
+        
+        function showSpinner(message, type) {
             // 빈 상태 메시지 제거
             const chatEmpty = chatDisplayDiv.querySelector('.chat-empty');
             if (chatEmpty) {
                 chatEmpty.remove();
+            }
+            
+            // 같은 메시지의 스피너가 이미 있는지 확인 (중복 방지)
+            const existingSpinners = chatDisplayDiv.querySelectorAll('.spinner-container');
+            for (let spinner of existingSpinners) {
+                const textDiv = spinner.querySelector('.spinner-text');
+                if (textDiv && textDiv.textContent === message) {
+                    // 같은 메시지의 스피너가 이미 있으면 추가하지 않음
+                    return;
+                }
+            }
+            
+            // 이전 스피너 완료 처리
+            if (type === 'api') {
+                // api 스피너가 오면 status 스피너 완료
+                completeSpinner('status');
+            } else if (type === 'reasoning') {
+                // reasoning 스피너가 오면 api 스피너 완료
+                completeSpinner('api');
             }
             
             const spinnerDiv = document.createElement('div');
@@ -728,12 +777,9 @@
                                 // 스피너 메시지인 경우 스피너 표시
                                 showSpinner(data.data.message, 'api');
                             } else {
-                                // API 결과 메시지인 경우 스피너 제거하고 결과 표시
-                                const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
-                                if (existingSpinner) {
-                                    existingSpinner.remove();
-                                }
-                                // API 결과를 에이전트 영역에 표시
+                                // API 결과 메시지인 경우 api 스피너 완료 처리
+                                completeSpinner('api');
+                                // API 결과 표시
                                 addApiResultMessage(data.data.message);
                             }
                         } else if (data.type === 'api_call') {
@@ -747,6 +793,8 @@
                         } else if (data.type === 'reasoning_summary' && data.data.message) {
                             showSpinner(data.data.message, 'reasoning');
                         } else if (data.type === 'end' && data.data.message) {
+                            // reasoning 스피너 완료 처리
+                            completeSpinner('reasoning');
                             addChatMessage(data.data.message, true);
                             shouldReconnect = false; // end가 오면 재연결 시도 안 함
                             // 연결 명시적으로 종료
@@ -774,17 +822,17 @@
                                     // 스피너 메시지인 경우 스피너 표시
                                     showSpinner(data.transaction_payload.message, 'api');
                                 } else {
-                                    // API 결과 메시지인 경우 스피너 제거하고 결과 표시
-                                    const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
-                                    if (existingSpinner) {
-                                        existingSpinner.remove();
-                                    }
+                                    // API 결과 메시지인 경우 api 스피너 완료 처리
+                                    completeSpinner('api');
+                                    // API 결과 표시
                                     addApiResultMessage(data.transaction_payload.message);
                                 }
                             }
                         } else if (data.type === 'reasoning_summary' && data.transaction_payload.message) {
                             showSpinner(data.transaction_payload.message, 'reasoning');
                         } else if (data.type === 'end' && data.transaction_payload.message) {
+                            // reasoning 스피너 완료 처리
+                            completeSpinner('reasoning');
                             addChatMessage(data.transaction_payload.message, true);
                             shouldReconnect = false; // end가 오면 재연결 시도 안 함
                             // 연결 명시적으로 종료
@@ -812,17 +860,17 @@
                                     // 스피너 메시지인 경우 스피너 표시
                                     showSpinner(data.data.transaction_payload.message, 'api');
                                 } else {
-                                    // API 결과 메시지인 경우 스피너 제거하고 결과 표시
-                                    const existingSpinner = chatDisplayDiv.querySelector('.spinner-container');
-                                    if (existingSpinner) {
-                                        existingSpinner.remove();
-                                    }
+                                    // API 결과 메시지인 경우 api 스피너 완료 처리
+                                    completeSpinner('api');
+                                    // API 결과 표시
                                     addApiResultMessage(data.data.transaction_payload.message);
                                 }
                             }
                         } else if (data.type === 'reasoning_summary' && data.data.transaction_payload.message) {
                             showSpinner(data.data.transaction_payload.message, 'reasoning');
                         } else if (data.type === 'end') {
+                            // reasoning 스피너 완료 처리
+                            completeSpinner('reasoning');
                             addChatMessage(data.data.transaction_payload.message, true);
                             shouldReconnect = false; // end가 오면 재연결 시도 안 함
                             // 연결 명시적으로 종료

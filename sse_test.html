@@ -308,6 +308,7 @@
             color: #374151;
             font-size: 15px;
             line-height: 1.6;
+            white-space: pre-wrap;
         }
         
         .spinner-container {
@@ -417,7 +418,7 @@
         <div class="content">
             <div class="config-section">
                 <label for="turnId">Turn ID</label>
-                <input type="text" id="turnId" value="test-Turn-123" placeholder="Turn ID를 입력하세요">
+                <input type="text" id="turnId" placeholder="Turn ID를 입력하세요">
             </div>
             
             <div class="panels">
@@ -462,9 +463,9 @@
         let eventSource = null;
         let isConnecting = false;
         let pendingMessage = null;
-        //const apiUrl = 'http://localhost:8000/api/v1'; // 고정된 API URL
+        //const apiUrl = 'http://localhost:8000/api/v1'; // API URL
         const apiUrl = 'http://sol-sse-gw.crewai-axd.com/api/v1'
-        const sessionId = 'test1234'; // 고정된 Session ID
+        const sessionId = 'test1234'; // Session ID 고정
         const turnIdInput = document.getElementById('turnId');
         const receiveMessagesDiv = document.getElementById('receiveMessages');
         const sendMessagesDiv = document.getElementById('sendMessages');
@@ -475,19 +476,25 @@
         let shouldReconnect = true;
         let lastApiResult = null; // API 결과 저장
         
-        // turnId 카운터 초기화
+        // UUID 생성 함수
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+        
+        // Turn ID 초기값을 UUID로 설정
+        if (turnIdInput && !turnIdInput.value) {
+            turnIdInput.value = generateUUID();
+        }
+        
+        // turnId를 새로운 UUID로 변경
         function getNextturnId() {
-            const currentValue = turnIdInput.value.trim();
-            const match = currentValue.match(/^(.+-)(\d+)$/);
-            if (match) {
-                const prefix = match[1];
-                const number = parseInt(match[2], 10);
-                const nextId = `${prefix}${number + 1}`;
-                turnIdInput.value = nextId;
-                return nextId;
-            }
-            // 패턴이 맞지 않으면 그대로 반환
-            return currentValue;
+            const newId = generateUUID();
+            turnIdInput.value = newId;
+            return newId;
         }
 
         function addMessage(container, type, data, label = '') {
@@ -808,7 +815,6 @@
                             addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                         }
                     }
-                    // 하위 호환성: data.transaction_payload 구조 (구버전)
                     else if (data.type && data.transaction_payload) {
                         if (data.type === 'status' && data.transaction_payload.message) {
                             showSpinner(data.transaction_payload.message, 'status');
@@ -846,7 +852,6 @@
                             addMessage(receiveMessagesDiv, 'system', 'SSE 연결이 정상적으로 종료되었습니다.');
                         }
                     }
-                    // 하위 호환성: data.data.transaction_payload 구조 (구버전)
                     else if (data.type && data.data && data.data.transaction_payload) {
                         if (data.type === 'status' && data.data.transaction_payload.message) {
                             showSpinner(data.data.transaction_payload.message, 'status');
@@ -1030,9 +1035,21 @@
                 
                 // end 메시지인 경우 API 결과 포함
                 if (msg.type === 'end') {
+                    let apiMessage = '';
+                    if (lastApiResult) {
+                        try {
+                            // JSON 문자열인 경우 파싱
+                            const parsed = typeof lastApiResult === 'string' ? JSON.parse(lastApiResult) : lastApiResult;
+                            // message 필드만 추출
+                            apiMessage = parsed.message || lastApiResult;
+                        } catch (e) {
+                            // 파싱 실패 시 원본 사용
+                            apiMessage = lastApiResult;
+                        }
+                    }
                     msg = {
                         ...msg,
-                        message: `[${message}] 에 대한 답변은 실제 AI 에이전트와 연동 후 제공됩니다.${lastApiResult ? ` api를 통해서 받은 메시지는 [${lastApiResult}] 입니다.` : ''}`
+                        message: `[${message}] 에 대한 답변은 실제 AI 에이전트와 연동 후 제공됩니다.${apiMessage ? `\napi를 통해서 받은 메시지는 [${apiMessage}] 입니다.` : ''}`
                     };
                 }
                 
@@ -1047,7 +1064,7 @@
                     // 5초 대기 후 API 호출
                     await new Promise(resolve => setTimeout(resolve, 5000));
                     await callTransactionAPI();
-                    // API 호출 완료 후 바로 다음 메시지로 넘어가므로 대기 시간 없음
+
                 } else {
                     // status가 아닌 경우에만 대기
                     // 마지막 메시지가 아니면 5초 대기
